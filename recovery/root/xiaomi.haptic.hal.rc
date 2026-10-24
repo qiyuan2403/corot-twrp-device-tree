@@ -3,3 +3,8 @@ service vibratorfeature-hal-service /vendor/bin/hw/vendor.xiaomi.hardware.vibrat
     user system
     group system input
     seclabel u:r:recovery:s0
+    # haptic.ko lives in /vendor_dlkm and is loaded by TWRP's module loader,
+    # which sets twrp.modules.loaded before the GUI starts. Starting this HAL
+    # from class_start hal would race that loader and leave init restarting a
+    # service whose /dev/input node does not exist yet.
+    disabled

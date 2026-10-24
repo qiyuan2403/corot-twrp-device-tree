@@ -15,10 +15,29 @@ on init
     setprop sys.usb.controller "11201000.usb0"
     setprop sys.usb.ffs.aio_compat 1
     export LD_LIBRARY_PATH /system/lib64:/vendor/lib64:/vendor/lib64/hw
+
+    # KeyMint seals key blobs to the OS version and patch levels of the system
+    # that created them (ro.build.version.release, ro.build.version.security_patch,
+    # ro.vendor.build.security_patch). This image is built as Android 14 /
+    # 2099-12-31, but the installed HyperOS 2.0.203.0.VMLCNXM is Android 15 /
+    # 2025-07-01. With the mismatched identity KeyMint answers every metadata
+    # and CE key operation with KEY_REQUIRES_UPGRADE and read_key fails before
+    # TWRP can override these from the system partition later. Set the stock
+    # identity before any security HAL starts; update this block after an OTA.
+    exec - root root -- /system/bin/resetprop ro.build.version.release 15
+    exec - root root -- /system/bin/resetprop ro.build.version.release_or_codename 15
+    exec - root root -- /system/bin/resetprop ro.build.version.security_patch 2025-07-01
+    exec - root root -- /system/bin/resetprop ro.vendor.build.security_patch 2025-07-01
     setprop crypto.ready 1
 
 on fs
     install_keyring
+    # tee-supplicant.rc was imported above, so its 'on fs' starts tee-supplicant
+    # before this action runs. Restart the security HALs here so they re-read the
+    # stock identity set in 'on init' after the TEE daemon exists.
+    restart vendor.keymint-mitee
+    restart vendor.gatekeeper-1-0
+    restart keystore2
 
 # We need vold early for metadata encryption.
 # tee-supplicant also needs /mnt/vendor/persist mounted before it starts: the path
@@ -132,5 +151,9 @@ on boot
     start health-hal-2-1
     start mifs_hal
     start overrideprops
-    start vibratorfeature-hal-service
     setprop sys.usb.config adb
+
+# TWRP loads haptic.ko from /vendor_dlkm during Process_Fstab and sets this
+# property before gui_init, so the vibrator HAL always sees its input device.
+on property:twrp.modules.loaded=true
+    start vibratorfeature-hal-service
