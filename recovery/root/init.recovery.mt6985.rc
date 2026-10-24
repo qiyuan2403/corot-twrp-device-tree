@@ -31,16 +31,14 @@ on init
     exec - root root -- /system/bin/resetprop ro.build.version.release_or_codename 15
     exec - root root -- /system/bin/resetprop ro.build.version.security_patch 2025-07-01
     exec - root root -- /system/bin/resetprop ro.vendor.build.security_patch 2025-07-01
-    setprop crypto.ready 1
 
 on fs
     install_keyring
-    # tee-supplicant.rc was imported above, so its 'on fs' starts tee-supplicant
-    # before this action runs. Restart the security HALs here so they re-read the
-    # stock identity set in 'on init' after the TEE daemon exists.
-    restart vendor.keymint-mitee
-    restart vendor.gatekeeper-1-0
-    restart keystore2
+    # tee-supplicant.rc was imported above, so its own 'on fs' starts
+    # tee-supplicant before this action runs. KeyMint is started by the
+    # init.svc.tee-supplicant=running trigger below, after the secure-storage
+    # partitions mounted in 'on early-fs' are in place.
+    setprop crypto.ready 1
 
 # We need vold early for metadata encryption.
 # tee-supplicant also needs /mnt/vendor/persist mounted before it starts: the path
@@ -54,6 +52,24 @@ on early-fs
     restorecon_recursive /mnt/vendor/persist
     mkdir /mnt/vendor/persist/data 0755 system system
     mkdir /mnt/vendor/persist/fdsd 0755 system system
+
+    # MediaTek MiTEE stores the secure-deletion secret used to unwrap the
+    # metadata key on these partitions. Stock init mounts them before KeyMint;
+    # recovery's minimal init does not. Without them the KeyMint TA returns
+    # -33 INVALID_KEY_BLOB even though the blob is valid. Mount before vold and
+    # before keymint starts.
+    mkdir /mnt/vendor/protect_f 0755 root root
+    mkdir /mnt/vendor/protect_s 0755 root root
+    mkdir /mnt/vendor/nvdata 0755 root root
+    mkdir /mnt/vendor/nvcfg 0755 root root
+    wait /dev/block/by-name/protect1 5
+    wait /dev/block/by-name/protect2 5
+    wait /dev/block/by-name/nvdata 5
+    wait /dev/block/by-name/nvcfg 5
+    mount ext4 /dev/block/by-name/protect1 /mnt/vendor/protect_f noatime,nosuid,nodev
+    mount ext4 /dev/block/by-name/protect2 /mnt/vendor/protect_s noatime,nosuid,nodev
+    mount ext4 /dev/block/by-name/nvdata /mnt/vendor/nvdata noatime,nosuid,nodev
+    mount ext4 /dev/block/by-name/nvcfg /mnt/vendor/nvcfg noatime,nosuid,nodev
     start vold
 
 # NOTE: there is deliberately no 'on late-fs' here. Recovery init never triggers
@@ -131,12 +147,18 @@ service vendor.gatekeeper-1-0 /vendor/bin/hw/android.hardware.gatekeeper@1.0-ser
     oneshot
     seclabel u:r:recovery:s0
  
-on property:crypto.ready=1
+# TEE first. The secure-storage partitions are already mounted in early-fs,
+# so KeyMint can read the secure-deletion secret when this fires.
+on property:init.svc.tee-supplicant=running
     start vendor.keymint-mitee
 
-on property:hwservicemanager.ready=true
-    start vendor.keymint-mitee
+# Gatekeeper must come after KeyMint. Starting both together produced
+# intermittent -26 auth-token races on duchamp (same MiTEE stack); a 1 second
+# gap gave 5/5 successful metadata + FBE decryptions there.
+on property:init.svc.vendor.keymint-mitee=running
+    exec - root root -- /system/bin/sleep 1
     start vendor.gatekeeper-1-0
+    restart keystore2
 
 # TEE teardown once decryption is done. The earlier blocks on
 # ro.crypto.state=unsupported / =unencrypted and on crypto.ready=0 were removed:
