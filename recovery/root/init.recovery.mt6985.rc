@@ -4,6 +4,13 @@ import /miteelog.rc
 import /xiaomi.haptic.hal.rc
 
 on init
+    # Decryption needs recovery-domain SELinux permissions that AOSP's
+    # system/sepolicy/private/recovery.te does not grant: keystore_service find,
+    # vold_key:keystore2_key manage_blob, dm-default-key, /dev/tee0|teepriv0 and
+    # FS_IOC_ADD_ENCRYPTION_KEY on /data. This tree ships no sepolicy additions,
+    # so run recovery permissive (the vendor_boot cmdline also carries
+    # androidboot.selinux=permissive as a belt-and-braces measure).
+    write /sys/fs/selinux/enforce 0
     setprop sys.usb.configfs 1
     setprop sys.usb.controller "11201000.usb0"
     setprop sys.usb.ffs.aio_compat 1

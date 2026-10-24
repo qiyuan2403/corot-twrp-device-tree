@@ -82,7 +82,12 @@ BOARD_BOOT_HEADER_VERSION := 4
 BOARD_DTB_SIZE := 390904
 BOARD_DTB_OFFSET := 0x07C88000
 BOARD_HEADER_SIZE := 2128
-BOARD_VENDOR_CMDLINE := bootopt=64S3,32N2,64N2
+# androidboot.selinux=permissive: recovery runs TWRP, which needs permissions
+# AOSP recovery.te does not grant (keystore2 service lookup, vold_key blob
+# management, dm-default-key, TEE devices). Without it /data decryption is
+# denied by SELinux before it starts. init.recovery.mt6985.rc also writes
+# /sys/fs/selinux/enforce 0.
+BOARD_VENDOR_CMDLINE := bootopt=64S3,32N2,64N2 androidboot.selinux=permissive
 
 BOARD_MKBOOTIMG_ARGS += --dtb $(TARGET_PREBUILT_DTB)
 BOARD_MKBOOTIMG_ARGS += --vendor_cmdline $(BOARD_VENDOR_CMDLINE)
