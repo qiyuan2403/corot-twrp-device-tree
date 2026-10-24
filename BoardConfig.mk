@@ -58,13 +58,13 @@ BOARD_USES_METADATA_PARTITION := true
 TW_INCLUDE_FBE_METADATA_DECRYPT := true
 TW_USE_FSCRYPT_POLICY := 2
 # KeyMint binds the metadata/CE key blobs to the system OS version. The
-# installed HyperOS 2.0.203.0 is Android 15 (SDK 35); building recovery as
-# Android 14 makes keymint reject the blobs with KEY_REQUIRES_UPGRADE before
-# TWRP can decrypt /data. The init rc also resetprops these values at boot.
-# The patch levels stay at the TWRP default here and are reset to the stock
-# 2025-07-01 by the init rc; see twrp-patches-vold/0001 for the matching
-# empty-upgraded-blob guard in system/vold/KeyStorage.cpp.
-PLATFORM_VERSION := 15
+# installed HyperOS 2.0.203.0 is Android 15 (SDK 35). Do not raise
+# PLATFORM_VERSION here: the Android 14 build's CTS platform_releases.txt has
+# no "15" entry and ckati fails before compiling. The init rc resetprops
+# ro.build.version.release/security_patch to the stock values before keymint
+# starts instead; see twrp-patches-vold/0001 for the matching empty-upgraded-
+# blob guard in system/vold/KeyStorage.cpp.
+PLATFORM_VERSION := 14
 PLATFORM_VERSION_LAST_STABLE := $(PLATFORM_VERSION)
 PLATFORM_SECURITY_PATCH := 2099-12-31
 BOOT_SECURITY_PATCH := $(PLATFORM_SECURITY_PATCH)
