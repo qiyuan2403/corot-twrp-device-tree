@@ -193,6 +193,24 @@ jobs:
         git -C bootable/recovery status --short
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
+    - name: Apply TWRP 14.1 fixes (system/vold)
+      # TeamWin's vold has the "key blob was not upgraded" early return
+      # commented out; with a stock-matching KeyMint identity no upgrade is
+      # performed and the following dereference of the empty std::optional
+      # is undefined behaviour. Restore the guard before building.
+      run: |
+        DT="$(pwd)/${{ github.event.inputs.DEVICE_PATH }}"
+        if [ -d "$DT/twrp-patches-vold" ]; then
+          for PATCH in "$DT"/twrp-patches-vold/*.patch; do
+            [ -e "$PATCH" ] || continue
+            echo "::group::apply vold $(basename "$PATCH")"
+            git -C system/vold apply --verbose "$PATCH"
+            echo "::endgroup::"
+          done
+          git -C system/vold status --short
+        fi
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
     - name: Set Swap Space
       uses: pierotofy/set-swap-space@master
       with:
