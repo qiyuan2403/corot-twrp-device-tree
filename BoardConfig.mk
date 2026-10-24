@@ -193,6 +193,11 @@ TW_INCLUDE_LPDUMP := true
 TW_INCLUDE_LPTOOLS := true
 TW_EXCLUDE_DEFAULT_USB_INIT := true
 TW_EXCLUDE_APEX := true
+# bash/nano are optional; dropping them frees ~1.2 MB uncompressed in the
+# 64 MiB vendor_boot ramdisk, which is needed for the keystore2/keymint
+# runtime libs added by twrp-patches/0008.
+TW_EXCLUDE_BASH := true
+TW_EXCLUDE_NANO := true
 TW_INCLUDE_NTFS_3G := true
 TARGET_USES_MKE2FS := true
 TW_INCLUDE_FUSE_EXFAT := true
