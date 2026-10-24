@@ -1,0 +1,57 @@
+diff --git a/kernel_module_loader.cpp b/kernel_module_loader.cpp
+index 47ca4a3..3c6094b 100644
+--- a/kernel_module_loader.cpp
++++ b/kernel_module_loader.cpp
+@@ -4,6 +4,16 @@
+ 
+ const std::vector<std::string> kernel_modules_requested = TWFunc::split_string(EXPAND(TW_LOAD_VENDOR_MODULES), ' ', true);
+ 
++// Module names treat '-' and '_' as interchangeable (modprobe folds them), but
++// the .ko file names on disk may use either separator. Fold them so a requested
++// "mediatek_drm.ko" matches a shipped "mediatek-drm.ko" and vice versa.
++static std::string Normalize_Module_Name(const std::string& name) {
++	std::string normalized(name);
++	for (auto&& c : normalized)
++		if (c == '-') c = '_';
++	return normalized;
++}
++
+ BOOT_MODE KernelModuleLoader::Get_Boot_Mode() {
+ 	std::string cmdline;
+ 	std::string bootconfig;
+@@ -127,7 +137,11 @@ int KernelModuleLoader::Try_And_Load_Modules(std::string module_dir, bool vendor
+ 		}
+ 		LOGINFO("mounting %s on %s\n", dest_module_dir.c_str(), module_dir.c_str());
+ 		if (mount(dest_module_dir.c_str(), module_dir.c_str(), "", MS_BIND, NULL) == 0) {
+-			Modprobe m({module_dir}, "modules.load.twrp", false);
++			// Resolve dependencies from the directory's modules.dep: the vendor
++			// modules TWRP needs (display, touch) pull in dependencies that are
++			// not listed in modules.load.twrp, and the ramdisk modules may not
++			// match the running kernel.
++			Modprobe m({module_dir}, "modules.load.twrp", true);
+ 			m.LoadListedModules(false);
+ 			modules_loaded = m.GetModuleCount();
+ 			umount2(module_dir.c_str(), MNT_DETACH);
+@@ -148,7 +162,10 @@ std::vector<string> KernelModuleLoader::Skip_Loaded_Kernel_Modules() {
+ 	for (auto&& module_line:loaded_modules) {
+ 		auto module = TWFunc::Split_String(module_line, " ")[0];
+ 		std::string full_module_name = module + ".ko";
+-		auto found = std::find(kernel_modules.begin(), kernel_modules.end(), full_module_name);
++		auto found = std::find_if(kernel_modules.begin(), kernel_modules.end(),
++			[&full_module_name](const std::string& requested) {
++				return Normalize_Module_Name(requested) == Normalize_Module_Name(full_module_name);
++			});
+ 		if (found != kernel_modules.end()) {
+ 			LOGINFO("found module to dedupe: %s\n", (*found).c_str());
+ 			kernel_modules.erase(found);
+@@ -172,8 +189,8 @@ bool KernelModuleLoader::Write_Module_List(std::string module_dir) {
+ 			std::string kernel_module = de->d_name;
+ 			if (de->d_type == DT_REG) {
+ 				if (android::base::EndsWith(kernel_module, ".ko")) {
+-					for (auto&& requested:kernel_modules_requested) {
+-						if (kernel_module == requested) {
++					for (auto&& requested:deduped_modules) {
++						if (Normalize_Module_Name(kernel_module) == Normalize_Module_Name(requested)) {
+ 							kernel_modules.push_back(kernel_module);
+ 							continue;
+ 						}

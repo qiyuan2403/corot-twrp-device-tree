@@ -219,13 +219,17 @@ TW_BATTERY_SYSFS_WAIT_SECONDS := 6
 TW_BACKUP_EXCLUSIONS := /data/fonts
 TW_USE_SERIALNO_PROPERTY_FOR_DEVICE_ID := true
 
-# Haptics (awinic LRA, AIDL vibratorfeature).
-# The driver is NOT built in: the device loads 'haptic' as a module from
-# /vendor_dlkm/lib/modules/haptic.ko (verified: /proc/modules lists it, and the
-# module lives at /kw/repo/artifacts/device-modules/vendor_dlkm/haptic.ko).
-# TWRP must load it itself, otherwise the vibratorfeature HAL has no device and
-# every vibration is a silent no-op. This also enables kernel_module_loader.cpp.
-TW_LOAD_VENDOR_MODULES := "haptic.ko"
+# Vendor modules TWRP has to load itself.
+# Display, touch and haptics are all out-of-tree modules on corot, and the
+# modules shipped in this tree's ramdisk were built for a different kernel
+# revision than the one on the device (ramdisk vermagic
+# 5.15.167-android13-8-ge9f4b534d06e vs device 5.15.167-android13-8-00014-gbf0a81a7f319-
+# ab13297889), so the kernel refuses to load them. TWRP's module loader mounts
+# /vendor_dlkm and loads the modules from there instead; those are the ones the
+# running kernel already accepted at boot. Names are matched with '-' and '_'
+# folded (see twrp-patches/0009), and dependencies are resolved through the
+# directory's modules.dep.
+TW_LOAD_VENDOR_MODULES := "mediatek_drm.ko mediatek-drm.ko mtk_drm.ko goodix_core.ko gt9895.ko xiaomi_touch.ko haptic.ko mtk_panel_ext.ko panel-m12-36-02-0b-dsc-cmd.ko panel-m12-42-02-0a-dsc-cmd.ko panel-m12-36-02-0b-dsc-cmd-2nd.ko panel-m12-42-02-0a-dsc-cmd-2nd.ko leds-mtk.ko leds-mtk-disp.ko leds-mtk-pwm.ko pwm-mtk-disp.ko rt4831a_drv.ko mtk_disp_notify.ko"
 TW_SUPPORT_INPUT_AIDL_HAPTICS := true
 TW_SUPPORT_INPUT_AIDL_HAPTICS_FQNAME := "IVibrator/vibratorfeature"
 TW_SUPPORT_INPUT_AIDL_HAPTICS_FIX_OFF := true
